@@ -12,15 +12,13 @@ const client = new OpenAI({
 
 app.use(express.json());
 app.use(cors());
+app.use(express.static("public"));
 
 app.post("/chat", async (req, res) => {
   try {
     const userMessage = req.body.message || "";
-
     if (!userMessage) {
-      return res
-        .status(400)
-        .json({ error: "Missing 'message' in request body" });
+      return res.status(400).json({ error: "Missing 'message'" });
     }
 
     const response = await client.chat.completions.create({
@@ -28,8 +26,7 @@ app.post("/chat", async (req, res) => {
       messages: [
         {
           role: "system",
-          content:
-            "You are a helpful tax CPA assistant for self-employed professionals.",
+          content: "You are a helpful tax CPA assistant for self-employed professionals.",
         },
         { role: "user", content: userMessage },
       ],
@@ -39,14 +36,12 @@ app.post("/chat", async (req, res) => {
     return res.json({ reply });
   } catch (err) {
     console.error("OpenAI error:", err);
-    return res.status(500).json({
-      error: err?.message || "OpenAI error",
-    });
+    return res.status(500).json({ error: "OpenAI error" });
   }
 });
 
 app.get("/", (req, res) => {
-  res.send("tax-cpa server running on port 3000");
+  res.redirect("/index.html");
 });
 
 app.listen(port, () => {
