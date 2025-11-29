@@ -9,16 +9,26 @@ export default async function handler(req, res) {
   const { message } = req.body;
   
   try {
-    // BOTH AIs in parallel
-    const [geminiRes, openaiRes] = await Promise.allSettled([
-      fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `Tax/Crypto CPA: ${message}` }] }]
-        })
-      }),
-      fetch('https://api.openai.com/v1/chat/completions', {
+    // 1. Gemini primary (fast)
+    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `Tax/Crypto CPA: ${message}` }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
+      })
+    });
+    
+    const geminiData = await geminiRes.json();
+    const geminiReply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    if (!geminiReply) throw new Error('Gemini failed');
+    
+    let reply = geminiReply;
+    
+    // 2. OpenAI quality check (cheap model)
+    try {
+      const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -26,27 +36,23 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: `Tax/Crypto CPA: ${message}` }]
+          messages: [
+            { role: 'system', content: 'Verify tax/crypto accuracy. Respond ONLY: "✅ Verified" or "⚠️ Check with CPA"' },
+            { role: 'user', content: geminiReply }
+          ],
+          max_tokens: 20
         })
-      })
-    ]);
-
-    let reply = '';
-    
-    // Gemini primary
-    if (geminiRes.status === 'fulfilled' && geminiRes.value?.ok) {
-      const data = await geminiRes.value.json();
-      reply = data.candidates[0].content.parts[0].text;
+      });
+      
+      const openaiData = await openaiRes.json();
+      const verification = openaiData.choices[0].message.content.trim();
+      reply += `\n\n${verification}`;
+      
+    } catch (e) {
+      reply += '\n\n⚠️ OpenAI check failed';
     }
     
-    // OpenAI confirmation
-    if (openaiRes.status === 'fulfilled' && openaiRes.value?.ok) {
-      const data = await openaiRes.value.json();
-      const openaiReply = data.choices[0].message.content;
-      reply += `\n\n**OpenAI confirms:** ${openaiReply.substring(0, 120)}...`;
-    }
-
-    res.json({ reply: reply || 'Both AIs analyzing...' });
+    res.json({ reply });
     
   } catch (e) {
     res.status(500).json({ error: 'API error' });
