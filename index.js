@@ -1,1 +1,1 @@
-export default function handler(req, res) { res.status(200).json({ status: 'Tax CPA API ready' }); } 
+const express = require('express'); const cors = require('cors'); const path = require('path'); const app = express(); app.use(cors()); app.use(express.json()); app.use(express.static('public')); app.get('/', (req, res) =, 'public/index.html'))); app.use('/api', require('./api/chat')); app.listen(3000, () = on port 3000')); module.exports = app; 
