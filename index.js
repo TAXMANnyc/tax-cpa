@@ -1,49 +1,28 @@
-require("dotenv").config();
-const express = require("express");
-const OpenAI = require("openai");
-const cors = require("cors");
-
+const express = require('express');
+const cors = require('cors');
 const app = express();
-const port = process.env.PORT || 3000;
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-app.use(express.json());
 app.use(cors());
-app.use(express.static("public"));
+app.use(express.json());
+app.use(express.static('public'));
 
-app.post("/api/chat", async (req, res) => {
-  try {
-    const userMessage = req.body.message || "";
-    if (!userMessage) {
-      return res.status(400).json({ error: "Missing 'message'" });
-    }
-
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful tax CPA assistant for self-employed professionals.",
-        },
-        { role: "user", content: userMessage },
-      ],
-    });
-
-    const reply = response.choices?.[0]?.message?.content || "";
-    return res.json({ reply });
-  } catch (err) {
-    console.error("OpenAI error:", err);
-    return res.status(500).json({ error: "OpenAI error" });
-  }
+app.get('*', (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TAXCPA Chat</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white min-h-screen flex items-center justify-center p-8">
+  <div class="text-center">
+    <h1 class="text-4xl font-bold text-gray-900 mb-4">TAXCPA.AI</h1>
+    <p class="text-lg text-gray-600">AI Tax CPA Assistant</p>
+  </div>
+</body>
+</html>
+  `);
 });
 
-app.get("/", (req, res) => {
-  res.redirect("/index.html");
-});
-
-app.listen(port, () => {
-  console.log(`tax-cpa server listening on http://localhost:${port}`);
-});
+module.exports = app;
