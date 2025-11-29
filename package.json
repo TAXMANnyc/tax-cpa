@@ -1,1 +1,1 @@
-{ "name": "tax-cpa", "version": "1.0.0", "type": "module" } 
+{"name":"tax-cpa","version":"1.0.0","type":"module","description":"","main":"index.js","scripts":{"test":"echo \"Error: no test specified\" && exit 1","start":"node server.js"},"repository":{"type":"git","url":"git+https://github.com/TAXMANnyc/tax-cpa.git"},"keywords":[],"author":"","license":"ISC","bugs":{"url":"https://github.com/TAXMANnyc/tax-cpa/issues"},"homepage":"https://github.com/TAXMANnyc/tax-cpa#readme","dependencies":{"cors":"^2.8.5","dotenv":"^17.2.3","express":"^4.19.2","openai":"^6.9.1"}}
