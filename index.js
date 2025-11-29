@@ -14,7 +14,7 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static("public"));
 
-app.post("/chat", async (req, res) => {
+app.post("/api/chat", async (req, res) => {
   try {
     const userMessage = req.body.message || "";
     if (!userMessage) {
