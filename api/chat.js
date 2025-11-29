@@ -1,95 +1,78 @@
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+// BETTER API ROTATION - Backend (chat.taxcpa.com)
+const APIs = [
+  { name: 'Groq', endpoint: 'https://api.groq.com/...', key: process.env.GROQ_KEY, rpm: 30 },
+  { name: 'Gemini', endpoint: 'https://generativelanguage.googleapis.com/...', key: process.env.GEMINI_KEY, rpm: 5 },
+  { name: 'OpenAI', endpoint: 'https://api.openai.com/v1/chat/completions', key: process.env.OPENAI_KEY, rpm: 10 }
+];
+
+let lastUsedIndex = 0;
+let requestCounts = { groq: 0, gemini: 0, openai: 0 };
+const RESET_WINDOW = 60 * 1000; // 1 minute
+
+async function smartAPIrotate(message) {
+  // Find least used API with capacity
+  let bestAPI = null;
+  let bestScore = Infinity;
   
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).end();
-  
-  const { message } = req.body;
-  
-  // Quad AI Fallback: Fast/Cheap → Reliable → FREE → Expensive
-  const apis = [
-    // 1. Gemini (fastest, $0.075/1M)
-    async () => {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          contents: [{ parts: [{ text: message }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1000 }
-        })
-      });
-      const data = await res.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text;
-    },
-    // 2. OpenAI (reliable, $0.15/1M)
-    async () => {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: message }]
-        })
-      });
-      const data = await res.json();
-      return data.choices?.[0]?.message?.content;
-    },
-    // 3. FREE Llama 3.1 (Groq - 500+ tokens/sec)
-    async () => {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-405b-reasoning',
-          messages: [{ role: 'user', content: message }]
-        })
-      });
-      const data = await res.json();
-      return data.choices?.[0]?.message?.content;
-    },
-    // 4. Grok (expensive last resort)
-    async () => {
-      const res = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'grok-beta',
-          messages: [{ role: 'user', content: message }],
-          max_tokens: 1000
-        })
-      });
-      const data = await res.json();
-      return data.choices?.[0]?.message?.content;
+  for (let i = 0; i < APIs.length; i++) {
+    const api = APIs[i];
+    const count = requestCounts[api.name.toLowerCase()];
+    const score = count / api.rpm; // Load factor
+    
+    if (score < bestScore && count < api.rpm * 0.8) { // Use <80% capacity
+      bestScore = score;
+      bestAPI = api;
     }
-  ];
+  }
+  
+  // Fallback to round-robin
+  if (!bestAPI) bestAPI = APIs[lastUsedIndex];
   
   try {
-    for (let i = 0; i < apis.length; i++) {
-      try {
-        console.log(`Trying API ${i + 1}/${apis.length}`);
-        const reply = await apis[i]();
-        if (reply) {
-          console.log(`Success: API ${i + 1}`);
-          return res.json({ reply });
-        }
-      } catch (e) {
-        console.log(`API ${i + 1} failed:`, e.message);
-      }
+    console.log(`Using ${bestAPI.name} (load: ${requestCounts[bestAPI.name.toLowerCase()]}/${bestAPI.rpm})`);
+    
+    const response = await fetch(bestAPI.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${bestAPI.key}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: bestAPI.name === 'Groq' ? 'llama3-8b-8192' : 
+               bestAPI.name === 'Gemini' ? 'gemini-1.5-flash' : 'gpt-4o-mini',
+        messages: [{ role: 'user', content: message }],
+        max_tokens: 1000
+      })
+    });
+    
+    if (response.status === 429) {
+      requestCounts[bestAPI.name.toLowerCase()]++;
+      throw new Error('Rate limited');
     }
-    res.status(500).json({ reply: 'All APIs busy. Try again in 30 seconds.' });
+    
+    requestCounts[bestAPI.name.toLowerCase()]++;
+    lastUsedIndex = (lastUsedIndex + 1) % APIs.length;
+    
+    return await response.json();
   } catch (e) {
-    console.error('Fatal error:', e);
-    res.status(500).json({ reply: 'Service temporarily unavailable.' });
+    console.log(`${bestAPI.name} failed: ${e.message}`);
+    // Try next API
+    return smartAPIrotate(message); // Recursive fallback
   }
 }
+
+// Reset counters every minute
+setInterval(() => {
+  Object.keys(requestCounts).forEach(key => requestCounts[key] = 0);
+}, RESET_WINDOW);
+
+// Your /api/chat endpoint
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    const result = await smartAPIrotate(message);
+    res.json({ reply: result.choices[0].message.content });
+  } catch (e) {
+    res.status(429).json({ error: 'All APIs busy. Try again in 1 minute.' });
+  }
+});
