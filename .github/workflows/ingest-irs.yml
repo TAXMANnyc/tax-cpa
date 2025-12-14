@@ -22,4 +22,4 @@ jobs:
           git config user.email "github-actions@github.com"
           git add data/irs
           git commit -m "data: fetch IRS Publication 17" || echo "No changes"
-          git push
+          git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
