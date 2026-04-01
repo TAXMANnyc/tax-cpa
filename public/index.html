@@ -1,14 +1,25 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <title>TAXCPA Chat</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-white min-h-screen flex items-center justify-center p-8">
-  <div class="text-center">
-    <h1 class="text-4xl font-bold text-gray-900 mb-4">TAXCPA.AI</h1>
-    <p class="text-lg text-gray-600">AI Tax CPA Assistant</p>
-  </div>
+<html><head><title>Tax CPA AI</title></head><body style="font-family:sans-serif;margin:40px;">
+<h1>TAXCPA.AI Test</h1>
+<div id="chat" style="border:1px solid #ccc;padding:20px;height:300px;overflow:auto;"></div>
+<input id="input" placeholder="Ask about taxes" style="width:70%;padding:10px;">
+<button onclick="send()" style="padding:10px;">Send</button>
+<script>
+async function send(){
+  const input = document.getElementById('input');
+  const chat = document.getElementById('chat');
+  const message = input.value;
+  chat.innerHTML += `<p><b>You:</b> ${message}</p>`;
+  input.value = '';
+  const res = await fetch('/api/chat', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({message})
+  });
+  const data = await res.json();
+  chat.innerHTML += `<p><b>AI:</b> ${data.response}</p>`;
+  chat.scrollTop = chat.scrollHeight;
+}
+</script>
 </body>
 </html>

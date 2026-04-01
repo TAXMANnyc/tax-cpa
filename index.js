@@ -1,1 +1,0 @@
-export default async function handler(req, res) { res.setHeader('Access-Control-Allow-Origin', '*'); if (req.method === 'OPTIONS') return res.status(200).end(); if (req.url === '/api/chat') return require('./api/chat').default(req, res); const fs = require('fs'); res.status(200).send(fs.readFileSync('./public/index.html', 'utf8')); } 
