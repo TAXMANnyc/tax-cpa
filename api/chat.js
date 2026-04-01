@@ -1,29 +1,40 @@
-require('dotenv').config();
-const OpenAI = require('openai');
+import OpenAI from 'openai';
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'POST only' });
+    return;
+  }
   
   try {
-    const { message } = req.body;
-    if (!message) return res.status(400).json({ error: 'No message' });
+    const { message } = await new Response(req.body).json();
+    
+    if (!process.env.OPENAI_API_KEY) {
+      res.json({ response: `API WORKS! You said: "${message}" (add OPENAI_API_KEY next)` });
+      return;
+    }
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: message }],
-      max_tokens: 1000,
-      temperature: 0.7
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: message }],
     });
     
-    res.json({ reply: completion.choices[0].message.content });
-  } catch(e) {
-    console.error(e);
-    res.status(500).json({ error: 'AI error: ' + e.message });
+    res.json({ response: completion.choices[0].message.content });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-};
+}
